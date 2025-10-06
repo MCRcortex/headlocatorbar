@@ -7,9 +7,9 @@ import net.minecraft.client.gui.contextualbar.LocatorBarRenderer;
 import net.minecraft.client.resources.WaypointStyle;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.*;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.waypoints.TrackedWaypoint;
-import net.minecraft.world.waypoints.Waypoint;
+import net.minecraft.world.waypoints.*;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -26,13 +26,13 @@ public class MixinLocatorBarRenderer {
     @Unique private TrackedWaypoint waypoint;
 
     @Inject(method = "method_70870", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/GuiGraphics;blitSprite(Lcom/mojang/blaze3d/pipeline/RenderPipeline;Lnet/minecraft/resources/ResourceLocation;IIIII)V",shift = At.Shift.BEFORE))
-    private void injectRender(Level level, GuiGraphics guiGraphics, int i, TrackedWaypoint trackedWaypoint, CallbackInfo ci) {
+    private void injectRender(Entity entity, Level level, PartialTickSupplier partialTickSupplier, GuiGraphics guiGraphics, int i, TrackedWaypoint trackedWaypoint, CallbackInfo ci) {
         this.waypoint = trackedWaypoint;
         var connection = Minecraft.getInstance().getConnection();
         if (connection != null && trackedWaypoint.id().left().isPresent()) {
             var info = connection.getPlayerInfo(trackedWaypoint.id().left().get());
             if (info != null) {
-                this.blitOverride = Minecraft.getInstance().getSkinManager().getInsecureSkin(info.getProfile()).texture();
+                this.blitOverride = Minecraft.getInstance().getSkinManager().createLookup(info.getProfile(), false).get().body().id();
             }
         }
     }
@@ -42,7 +42,7 @@ public class MixinLocatorBarRenderer {
         if (this.blitOverride == null) {
             instance.blitSprite(renderPipeline, resourceLocation, i, j, k, l, m);
         } else {
-            float distance = Mth.sqrt((float)this.waypoint.distanceSquared(this.minecraft.cameraEntity));
+            float distance = Mth.sqrt((float)this.waypoint.distanceSquared(this.minecraft.getCameraEntity()));
             Waypoint.Icon icon = this.waypoint.icon();
             WaypointStyle style = this.minecraft.getWaypointStyles().get(icon.style);
             float progress = 1-Mth.clamp((distance-style.nearDistance())/(style.farDistance()-style.nearDistance()),0,1);
