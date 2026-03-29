@@ -2,7 +2,7 @@ package me.cortex.facebar.mixin;
 
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.contextualbar.LocatorBarRenderer;
 import net.minecraft.client.resources.WaypointStyle;
 import net.minecraft.resources.Identifier;
@@ -25,8 +25,8 @@ public class MixinLocatorBarRenderer {
     @Unique private Identifier blitOverride;
     @Unique private TrackedWaypoint waypoint;
 
-    @Inject(method = "method_70870", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/GuiGraphics;blitSprite(Lcom/mojang/blaze3d/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIIII)V",shift = At.Shift.BEFORE))
-    private void injectRender(Entity entity, Level level, PartialTickSupplier partialTickSupplier, GuiGraphics guiGraphics, int i, TrackedWaypoint trackedWaypoint, CallbackInfo ci) {
+    @Inject(method = "lambda$extractRenderState$1", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;blitSprite(Lcom/mojang/blaze3d/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIIII)V",shift = At.Shift.BEFORE))
+    private void injectRender(Entity entity, Level level, PartialTickSupplier partialTickSupplier, GuiGraphicsExtractor guiGraphics, int i, TrackedWaypoint trackedWaypoint, CallbackInfo ci) {
         this.waypoint = trackedWaypoint;
         var connection = Minecraft.getInstance().getConnection();
         if (connection != null && trackedWaypoint.id().left().isPresent()) {
@@ -37,8 +37,8 @@ public class MixinLocatorBarRenderer {
         }
     }
 
-    @Redirect(method = "method_70870", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/GuiGraphics;blitSprite(Lcom/mojang/blaze3d/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIIII)V"))
-    private void redirectBlit(GuiGraphics instance, RenderPipeline renderPipeline, Identifier resourceLocation, int i, int j, int k, int l, int m) {
+    @Redirect(method = "lambda$extractRenderState$1", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;blitSprite(Lcom/mojang/blaze3d/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIIII)V"))
+    private void redirectBlit(GuiGraphicsExtractor instance, RenderPipeline renderPipeline, Identifier resourceLocation, int i, int j, int k, int l, int m) {
         if (this.blitOverride == null) {
             instance.blitSprite(renderPipeline, resourceLocation, i, j, k, l, m);
         } else {
