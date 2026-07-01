@@ -1,9 +1,12 @@
 package me.cortex.facebar.mixin;
 
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.contextualbar.LocatorBar;
+import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.resources.WaypointStyle;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
@@ -16,45 +19,58 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import net.minecraft.client.gui.components.PlayerFaceExtractor;
 
 @Mixin(LocatorBar.class)
 public class MixinLocatorBar {
     @Shadow @Final private Minecraft minecraft;
-    @Unique private Identifier blitOverride;
     @Unique private TrackedWaypoint waypoint;
 
-    @Inject(method = "lambda$extractRenderState$1", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;blitSprite(Lcom/mojang/blaze3d/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIIII)V",shift = At.Shift.BEFORE))
+    @Inject(method = "lambda$extractRenderState$1", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;blitSprite(Lcom/mojang/blaze3d/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIIII)V",
+            ordinal = 0))
     private void injectRender(Entity entity, Level level, PartialTickSupplier partialTickSupplier, GuiGraphicsExtractor guiGraphics, int i, TrackedWaypoint trackedWaypoint, CallbackInfo ci) {
         this.waypoint = trackedWaypoint;
-        var connection = Minecraft.getInstance().getConnection();
-        if (connection != null && trackedWaypoint.id().left().isPresent()) {
-            var info = connection.getPlayerInfo(trackedWaypoint.id().left().get());
-            if (info != null) {
-                this.blitOverride = Minecraft.getInstance().getSkinManager().createLookup(info.getProfile(), false).get().body().id();
-            }
-        }
     }
 
-    @Redirect(method = "lambda$extractRenderState$1", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;blitSprite(Lcom/mojang/blaze3d/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIIII)V"))
-    private void redirectBlit(GuiGraphicsExtractor instance, RenderPipeline renderPipeline, Identifier resourceLocation, int i, int j, int k, int l, int m) {
-        if (this.blitOverride == null) {
-            instance.blitSprite(renderPipeline, resourceLocation, i, j, k, l, m);
-        } else {
-            float distance = Mth.sqrt((float)this.waypoint.distanceSquared(this.minecraft.getCameraEntity()));
-            Waypoint.Icon icon = this.waypoint.icon();
-            WaypointStyle style = this.minecraft.gui.hud.getWaypointStyles().get(icon.style);
-            float progress = 1-Mth.clamp((distance-style.nearDistance())/(style.farDistance()-style.nearDistance()),0,1);
-            k = Mth.lerpInt(progress, 4*100+100, (k)*100);
-            l = Mth.lerpInt(progress, 4*100+100, (l)*100);
-            instance.pose().pushMatrix();
-            instance.pose().scale(0.01f);
-            //TODO: maybe use `PlayerFaceRenderer.draw`
-            instance.blit(this.blitOverride, (i*100+450)-(k/2), (j*100+450)-(l/2), (i*100+450)-(k/2)+k, (j*100+450)-(l/2)+l, 1f/8,2f/8,1f/8,2f/8);
-            instance.blit(this.blitOverride, (i*100+450)-(k/2), (j*100+450)-(l/2), (i*100+450)-(k/2)+k, (j*100+450)-(l/2)+l, 5f/8,6f/8,1f/8,2f/8);
-            instance.pose().popMatrix();
+    @WrapOperation(method = "lambda$extractRenderState$1", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;blitSprite(Lcom/mojang/blaze3d/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIIII)V",
+            ordinal = 0))
+    private void redirectBlit(GuiGraphicsExtractor instance, RenderPipeline renderPipeline, Identifier resourceLocation, int x, int y, int width, int height, int color,Operation<Void> original) {
+
+        TrackedWaypoint waypoint = this.waypoint;
+        Entity camera = Minecraft.getInstance().getCameraEntity();
+
+        boolean shouldDrawHead = waypoint != null && camera != null;
+
+        if (shouldDrawHead) {
+            PlayerInfo playerInfo = waypoint.id().left()
+                    .map(uuid -> {
+                        var conn = Minecraft.getInstance().getConnection();
+                        return conn != null ? conn.getPlayerInfo(uuid) : null;
+                    })
+                    .orElse(null);
+            if (playerInfo != null) {
+                Waypoint.Icon icon = waypoint.icon();
+                WaypointStyle style = this.minecraft.gui.hud.getWaypointStyles().get(icon.style);
+                float distance = Mth.sqrt((float) waypoint.distanceSquared(camera));
+                float near = style.nearDistance();
+                float far = style.farDistance();
+                float progress = (far - near) > 0.001F
+                        ? 1.0F - Mth.clamp((distance - near) / (far - near), 0.0F, 1.0F)
+                        : 1.0F;
+                int baseSize = 9;
+                int minSize = 5;
+                int scaledSize = Mth.lerpInt(progress, minSize, baseSize);
+                int offset = (baseSize - scaledSize) / 2;
+                int drawX = x + offset;
+                int drawY = y + offset;
+
+                PlayerFaceExtractor.extractRenderState(instance, playerInfo.getSkin(), drawX, drawY, scaledSize);
+                return;
+            }
         }
-        this.blitOverride = null;
+        original.call(instance, renderPipeline, resourceLocation, x, y, width, height, color);
     }
 }
