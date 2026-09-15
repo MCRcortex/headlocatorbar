@@ -1,6 +1,7 @@
 package me.cortex.facebar.mixin;
 
-import com.mojang.blaze3d.pipeline.RenderPipeline;
+
+import com.mojang.renderpearl.api.pipeline.RenderPipeline;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.contextualbar.LocatorBar;
@@ -25,7 +26,7 @@ public class MixinLocatorBar {
     @Unique private Identifier blitOverride;
     @Unique private TrackedWaypoint waypoint;
 
-    @Inject(method = "lambda$extractRenderState$1", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;blitSprite(Lcom/mojang/blaze3d/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIIII)V",shift = At.Shift.BEFORE))
+    @Inject(method = "lambda$extractRenderState$1", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;blitSprite(Lcom/mojang/renderpearl/api/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIIII)V",shift = At.Shift.BEFORE))
     private void injectRender(Entity entity, Level level, PartialTickSupplier partialTickSupplier, GuiGraphicsExtractor guiGraphics, int i, TrackedWaypoint trackedWaypoint, CallbackInfo ci) {
         this.waypoint = trackedWaypoint;
         var connection = Minecraft.getInstance().getConnection();
@@ -37,7 +38,7 @@ public class MixinLocatorBar {
         }
     }
 
-    @Redirect(method = "lambda$extractRenderState$1", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;blitSprite(Lcom/mojang/blaze3d/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIIII)V"))
+    @Redirect(method = "lambda$extractRenderState$1", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/GuiGraphicsExtractor;blitSprite(Lcom/mojang/renderpearl/api/pipeline/RenderPipeline;Lnet/minecraft/resources/Identifier;IIIII)V"))
     private void redirectBlit(GuiGraphicsExtractor instance, RenderPipeline renderPipeline, Identifier resourceLocation, int i, int j, int k, int l, int m) {
         if (this.blitOverride == null) {
             instance.blitSprite(renderPipeline, resourceLocation, i, j, k, l, m);
